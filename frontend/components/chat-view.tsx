@@ -205,6 +205,16 @@ export function ChatView({ steps, baseIndex = 0, stepCount = 0, loadingOlder = f
     // Reset localCascadeId when currentConvId changes
     useEffect(() => { setLocalCascadeId(null); }, [currentConvId]);
 
+    // Scroll to bottom when entering/switching conversations
+    useEffect(() => {
+        autoScrollRef.current = true;
+        // Use a short delay to let the DOM render the new steps first
+        const timer = setTimeout(() => {
+            bottomRef.current?.scrollIntoView({ behavior: 'instant' });
+        }, 50);
+        return () => clearTimeout(timer);
+    }, [currentConvId]);
+
     // Close pickers on outside click
     useEffect(() => {
         const handler = (e: MouseEvent) => {
