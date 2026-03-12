@@ -240,6 +240,22 @@ if (-not $cfFound) {
 
 # --- Online mode: run silently, show only the clean result ---
 
+# Kill any existing processes on online ports (prevents key mismatch with stale sessions)
+Write-Host ""
+$ports = @(9807, 9808)
+foreach ($port in $ports) {
+    $existing = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+    if ($existing) {
+        foreach ($conn in $existing) {
+            $pid = $conn.OwningProcess
+            $procName = (Get-Process -Id $pid -ErrorAction SilentlyContinue).ProcessName
+            Write-Host "  [!] Killing stale process on port $port (PID $pid, $procName)" -ForegroundColor Yellow
+            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Seconds 1
+    }
+}
+
 # Remove old tunnel info so we can detect the new one
 $tunnelInfo = Join-Path (Get-Location) ".tunnel-info.txt"
 if (Test-Path $tunnelInfo) { Remove-Item $tunnelInfo -Force }

@@ -211,6 +211,17 @@ fi
 
 # --- Online mode: run silently, show only the clean result ---
 
+# Kill any existing processes on online ports (prevents key mismatch with stale sessions)
+echo ""
+for port in 9807 9808; do
+    pid=$(lsof -ti ":$port" 2>/dev/null)
+    if [ -n "$pid" ]; then
+        echo "  [!] Killing stale process on port $port (PID $pid)"
+        kill -9 $pid 2>/dev/null
+        sleep 1
+    fi
+done
+
 # Remove old tunnel info so we can detect the new one
 rm -f .tunnel-info.txt
 
