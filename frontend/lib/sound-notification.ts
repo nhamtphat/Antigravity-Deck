@@ -82,23 +82,27 @@ class SoundNotificationService {
   }
 
   private loadSettings(): SoundSettings {
-    if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+    if (typeof window === 'undefined') return { ...DEFAULT_SETTINGS };
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return DEFAULT_SETTINGS;
+      if (!stored) return { ...DEFAULT_SETTINGS };
       const parsed = JSON.parse(stored);
       return {
         enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : DEFAULT_SETTINGS.enabled,
         volume: typeof parsed.volume === 'number' ? parsed.volume : DEFAULT_SETTINGS.volume,
       };
     } catch {
-      return DEFAULT_SETTINGS;
+      return { ...DEFAULT_SETTINGS };
     }
   }
 
   private saveSettings(): void {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this._settings));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this._settings));
+    } catch {
+      // localStorage full or blocked — settings remain in memory only
+    }
     window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
   }
 
