@@ -238,24 +238,23 @@ async function init(onReady) {
         const result = await findApiPort(ports, inst.csrfToken);
         if (result) {
             const { name, category, folderUri } = await getWorkspaceInfo(result.port, inst.csrfToken, result.useTls, inst.workspaceId);
-            // Skip instances with no workspace folder (idle/detached LS processes)
-            if (!folderUri) {
-                console.log(`[~] Skipping detached LS (no workspace): PID ${inst.pid}`);
-                continue;
-            }
+            // Allow instances without workspace folder — use fallback name
+            // (macOS Antigravity may not expose workspace via process args or API)
             // Skip duplicate folder URIs (e.g. two LS processes for same workspace)
             if (seenFolderUris.has(folderUri)) {
                 console.log(`[~] Skipping duplicate workspace: ${name} (PID: ${inst.pid}, same folder as existing)`);
                 continue;
             }
+            const finalName = name || `LS-${inst.pid}`;
+            const finalUri = folderUri || `detached://${inst.pid}`;
             if (folderUri) seenFolderUris.add(folderUri);
             lsInstances.push({
                 pid: inst.pid,
                 csrfToken: inst.csrfToken,
                 workspaceId: inst.workspaceId,
-                workspaceName: name,
-                workspaceFolderUri: folderUri,
-                category,
+                workspaceName: finalName,
+                workspaceFolderUri: finalUri,
+                category: category || 'workspace',
                 port: result.port,
                 useTls: result.useTls,
                 active: false
@@ -331,11 +330,10 @@ async function rescanNow() {
             const result = await findApiPort(ports, inst.csrfToken);
             if (result) {
                 const { name, category, folderUri } = await getWorkspaceInfo(result.port, inst.csrfToken, result.useTls, inst.workspaceId);
-                // Skip instances with no workspace folder (idle/detached LS processes)
-                if (!folderUri) {
-                    console.log(`[~] Skipping detached LS (no workspace): PID ${inst.pid}`);
-                    continue;
-                }
+                // Allow instances without workspace folder — use fallback
+                // (macOS Antigravity may not expose workspace via process args or API)
+                const finalName = name || `LS-${inst.pid}`;
+                const finalUri = folderUri || `detached://${inst.pid}`;
                 // Dedup: if same workspaceFolderUri already exists, replace the old one (PID may have changed after restart)
                 const existingIdx = folderUri ? lsInstances.findIndex(i => i.workspaceFolderUri === folderUri && i.pid !== inst.pid) : -1;
                 if (existingIdx >= 0) {
@@ -349,9 +347,9 @@ async function rescanNow() {
                         pid: inst.pid,
                         csrfToken: inst.csrfToken,
                         workspaceId: inst.workspaceId,
-                        workspaceName: name,
-                        workspaceFolderUri: folderUri,
-                        category,
+                        workspaceName: finalName,
+                        workspaceFolderUri: finalUri,
+                        category: category || 'workspace',
                         port: result.port,
                         useTls: result.useTls,
                         active: wasActive
@@ -363,15 +361,15 @@ async function rescanNow() {
                         pid: inst.pid,
                         csrfToken: inst.csrfToken,
                         workspaceId: inst.workspaceId,
-                        workspaceName: name,
-                        workspaceFolderUri: folderUri,
-                        category,
+                        workspaceName: finalName,
+                        workspaceFolderUri: finalUri,
+                        category: category || 'workspace',
                         port: result.port,
                         useTls: result.useTls,
                         active: false
                     });
                     changed = true;
-                    console.log(`[+] New workspace detected: ${name} (PID: ${inst.pid}, Port: ${result.port})`);
+                    console.log(`[+] New workspace detected: ${finalName} (PID: ${inst.pid}, Port: ${result.port})`);
                 }
             }
         }
