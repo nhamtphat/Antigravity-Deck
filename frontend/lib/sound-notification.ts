@@ -51,6 +51,7 @@ class SoundNotificationService {
   private _initialized = false;
   private _settings: SoundSettings = DEFAULT_SETTINGS;
   private unsubscribers: Array<() => void> = [];
+  private pendingEvent: { eventId: string; convId: string } | null = null;
 
   // Status tracker — keyed per conversationId
   private statuses = new Map<string, string>();
@@ -189,6 +190,16 @@ class SoundNotificationService {
     if (now - (this.lastPlayTime.get(key) || 0) < DEBOUNCE_MS) return;
     this.lastPlayTime.set(key, now);
 
+    // If audio is locked (mobile, no user tap yet), queue max 1 event for replay on unlock
+    if (!this._unlocked && this.audioContext?.state === 'suspended') {
+      this.pendingEvent = { eventId, convId };
+      return;
+    }
+
+    await this.playSoundNow(eventId);
+  }
+
+  private async playSoundNow(eventId: string): Promise<void> {
     const volume = this._settings.volume / 100;
 
     // Try Web Audio API first
@@ -241,10 +252,21 @@ class SoundNotificationService {
   unlock(): void {
     if (this._unlocked) return;
     if (!this.audioContext) return;
-    this._unlocked = true;
 
     // Resume AudioContext (required by iOS Safari autoplay policy)
-    this.audioContext.resume().catch(() => {});
+    this.audioContext.resume().then(() => {
+      this._unlocked = true;
+      window.dispatchEvent(new Event(SETTINGS_CHANGED_EVENT));
+
+      // Replay the queued event (max 1) that arrived before unlock
+      if (this.pendingEvent) {
+        const { eventId } = this.pendingEvent;
+        this.pendingEvent = null;
+        this.playSoundNow(eventId);
+      }
+    }).catch(() => {
+      // resume failed — keep _unlocked false so banner stays visible
+    });
 
     // Play a silent buffer to fully "unlock" the audio pipeline
     try {
@@ -273,6 +295,7 @@ class SoundNotificationService {
     this.statuses.clear();
     this.initSeeded.clear();
     this.lastPlayTime.clear();
+    this.pendingEvent = null;
     this._initialized = false;
     this._unlocked = false;
   }
