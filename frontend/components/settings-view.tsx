@@ -5,7 +5,7 @@ import { authHeaders } from '@/lib/auth';
 import { getSettings, updateSettings } from '@/lib/cascade-api';
 import type { AppSettings } from '@/lib/cascade-api';
 import { cn } from '@/lib/utils';
-import { Check, X, Sparkles, CircleDot, Bot, Settings, Globe, Camera, Star } from 'lucide-react';
+import { Check, X, Sparkles, CircleDot, Bot, Settings, Globe, Camera, Star, Volume2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Volume2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { soundService, SETTINGS_CHANGED_EVENT } from '@/lib/sound-notification';
 
