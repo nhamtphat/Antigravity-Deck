@@ -205,6 +205,7 @@ async function init(onReady) {
 
     if (!instances.length) {
         console.log('[!] No language server instances found');
+        if (onReady) onReady();
         return;
     }
 
@@ -245,6 +246,7 @@ async function init(onReady) {
 
     if (lsInstances.length === 0) {
         console.log('[!] Could not find working API port on any instance');
+        if (onReady) onReady();
         return;
     }
 
@@ -278,14 +280,20 @@ function switchToInstance(index) {
     return true;
 }
 
-// Periodic re-scan for new LS instances (every 10s)
-const RESCAN_INTERVAL = 10000;
+// Periodic re-scan for new LS instances (Adaptive)
+const NORMAL_RESCAN_INTERVAL = 10000;
+const FAST_RESCAN_INTERVAL = 2000;
 let rescanTimer = null;
 let lastDetectedState = false; // track detection state transitions
 
 function startAutoRescan() {
-    if (rescanTimer) clearInterval(rescanTimer);
-    rescanTimer = setInterval(rescanNow, RESCAN_INTERVAL);
+    if (rescanTimer) clearTimeout(rescanTimer);
+    rescanTimer = setTimeout(rescanLoop, lsInstances.length === 0 ? FAST_RESCAN_INTERVAL : NORMAL_RESCAN_INTERVAL);
+}
+
+async function rescanLoop() {
+    await rescanNow();
+    rescanTimer = setTimeout(rescanLoop, lsInstances.length === 0 ? FAST_RESCAN_INTERVAL : NORMAL_RESCAN_INTERVAL);
 }
 
 async function rescanNow() {
