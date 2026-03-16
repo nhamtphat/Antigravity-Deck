@@ -95,6 +95,7 @@ async function pollNow() {
                             status,
                             trajectoryId: info.trajectoryId,
                             stepCount: info.stepCount || 0,
+                            summary: info.summary || '',
                             inst,
                         });
                     }
@@ -143,7 +144,7 @@ async function pollNow() {
                 // Web Push: send push notification for status transitions
                 try {
                     const { handleCascadeStatusPush } = require('./push-service');
-                    handleCascadeStatusPush(cascadeId, prevStatus || '', info.status);
+                    handleCascadeStatusPush(cascadeId, prevStatus || '', info.status, info);
                 } catch {}
 
 
@@ -487,7 +488,7 @@ async function startCascadeSSE() {
                                 // Web Push: send push notification for status transitions
                                 try {
                                     const { handleCascadeStatusPush } = require('./push-service');
-                                    handleCascadeStatusPush(convId, prevStatus || '', status);
+                                    handleCascadeStatusPush(convId, prevStatus || '', status, null);
                                 } catch {}
 
                                 // Bridge relay: trigger when cascade transitions from active → done
