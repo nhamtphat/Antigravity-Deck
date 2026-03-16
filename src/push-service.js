@@ -158,16 +158,90 @@ function isEventEnabled(eventKey) {
     return ns.events[eventKey] !== false;
 }
 
-function handleCascadeStatusPush(convId, prevStatus, newStatus) {
-    const shortId = convId.substring(0, 8);
+/**
+ * Extract a short, human-readable content snippet from the most recent meaningful step.
+ * Searches from the end of the cached steps for the first step with real content.
+ * Returns null if nothing useful found.
+ */
+function extractLastStepContent(convId) {
+    try {
+        const { stepCache } = require('./step-cache');
+        const cache = stepCache[convId];
+        if (!cache || !cache.steps || cache.steps.length === 0) return null;
+
+        // Walk backwards to find the latest meaningful step
+        for (let i = cache.steps.length - 1; i >= 0; i--) {
+            const step = cache.steps[i];
+            if (!step) continue;
+
+            // notifyUser message (highest priority — explicit message to user)
+            const notifyMsg = step.notifyUser?.notificationContent || step.notifyUser?.message;
+            if (notifyMsg && typeof notifyMsg === 'string' && notifyMsg.trim()) {
+                return notifyMsg.trim().substring(0, 120);
+            }
+
+            // taskBoundary status (agent task status)
+            const taskStatus = step.taskBoundary?.taskStatus;
+            const taskName = step.taskBoundary?.taskName;
+            if (taskStatus && typeof taskStatus === 'string' && taskStatus.trim()) {
+                return taskName ? `${taskName}: ${taskStatus.trim()}`.substring(0, 120) : taskStatus.trim().substring(0, 120);
+            }
+
+            // plannerResponse text (agent reply)
+            const plannerText =
+                step.plannerResponse?.modifiedResponse ||
+                step.plannerResponse?.response ||
+                step.plannerResponse?.text ||
+                step.plannerResponse?.content ||
+                (step.plannerResponse?.responseItems || []).map(r => r.text).filter(Boolean).join(' ');
+            if (plannerText && typeof plannerText === 'string' && plannerText.trim()) {
+                return plannerText.trim().substring(0, 120);
+            }
+
+            // codeAction description
+            const codeDesc =
+                step.codeAction?.actionSpec?.command?.description ||
+                step.codeAction?.description ||
+                step.codeAction?.instruction ||
+                step.codeAction?.actionSpec?.command?.instruction;
+            if (codeDesc && typeof codeDesc === 'string' && codeDesc.trim()) {
+                return codeDesc.trim().substring(0, 120);
+            }
+
+            // userInput (what the user said — only for first-step context)
+            if (i === cache.steps.length - 1) {
+                const userText = (step.userInput?.items || []).map(it => it.text).filter(Boolean).join(' ');
+                if (userText && userText.trim()) return userText.trim().substring(0, 120);
+            }
+        }
+    } catch { /* never block push send on content extraction failure */ }
+    return null;
+}
+
+/**
+ * Build a human-readable conversation label from summary + short ID.
+ * e.g. "Fix login bug" or "abc12345" if no summary.
+ */
+function convLabel(convId, convInfo) {
+    const summary = convInfo?.summary;
+    if (summary && typeof summary === 'string' && summary.trim()) {
+        return summary.trim().substring(0, 60);
+    }
+    return convId.substring(0, 8);
+}
+
+// handleCascadeStatusPush — convInfo is the trajectorySummary object ({ summary, stepCount, status, ... })
+function handleCascadeStatusPush(convId, prevStatus, newStatus, convInfo) {
+    const label = convLabel(convId, convInfo);
+    const lastContent = extractLastStepContent(convId);
 
     // Cascade complete: ACTIVE → DONE/IDLE
     if (ACTIVE_STATUSES.includes(prevStatus) && COMPLETE_STATUSES.includes(newStatus)) {
         if (!isEventEnabled('cascadeComplete')) return;
         sendPushToAll({
-            title: '✅ Cascade Complete',
-            body: `Cascade ${shortId} has finished running.`,
-            tag: `cascade-complete-${shortId}`,
+            title: `✅ ${label}`,
+            body: lastContent || 'Cascade has finished running.',
+            tag: `cascade-complete-${convId.substring(0, 8)}`,
             data: { url: '/', convId },
         });
         return;
@@ -177,9 +251,9 @@ function handleCascadeStatusPush(convId, prevStatus, newStatus) {
     if (newStatus === 'CASCADE_RUN_STATUS_WAITING_FOR_USER' && prevStatus !== 'CASCADE_RUN_STATUS_WAITING_FOR_USER') {
         if (!isEventEnabled('waitingForUser')) return;
         sendPushToAll({
-            title: '⏳ Action Required',
-            body: `Cascade ${shortId} is waiting for your approval.`,
-            tag: `waiting-${shortId}`,
+            title: `⏳ ${label} — Action Required`,
+            body: lastContent || 'Waiting for your approval.',
+            tag: `waiting-${convId.substring(0, 8)}`,
             data: { url: '/', convId },
         });
         return;
@@ -189,9 +263,9 @@ function handleCascadeStatusPush(convId, prevStatus, newStatus) {
     if (ERROR_STATUSES.includes(newStatus) && !ERROR_STATUSES.includes(prevStatus)) {
         if (!isEventEnabled('error')) return;
         sendPushToAll({
-            title: '❌ Cascade Error',
-            body: `Cascade ${shortId} encountered an error.`,
-            tag: `error-${shortId}`,
+            title: `❌ ${label} — Error`,
+            body: lastContent || 'Cascade encountered an error.',
+            tag: `error-${convId.substring(0, 8)}`,
             data: { url: '/', convId },
         });
         return;
@@ -199,13 +273,15 @@ function handleCascadeStatusPush(convId, prevStatus, newStatus) {
 }
 
 // Called from auto-accept.js when a step is auto-accepted
-function handleAutoAcceptedPush(convId) {
+// convInfo is optional: the trajectorySummary object ({ summary, ... })
+function handleAutoAcceptedPush(convId, convInfo) {
     if (!isEventEnabled('autoAccepted')) return;
-    const shortId = convId.substring(0, 8);
+    const label = convLabel(convId, convInfo);
+    const lastContent = extractLastStepContent(convId);
     sendPushToAll({
-        title: '⚡ Auto-Accepted',
-        body: `A change was auto-accepted for ${shortId}.`,
-        tag: `auto-accepted-${shortId}`,
+        title: `⚡ ${label} — Auto-Accepted`,
+        body: lastContent || 'A change was auto-accepted.',
+        tag: `auto-accepted-${convId.substring(0, 8)}`,
         data: { url: '/', convId },
     });
 }
